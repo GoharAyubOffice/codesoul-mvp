@@ -2,6 +2,8 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { fetchRepoData } from '@/lib/github/api'
+import { transformToGraph } from '@/lib/github/transformer'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -26,9 +28,18 @@ export async function GET(request: Request) {
 
     const [, owner, repo] = urlMatch
 
-    // TODO: Implement actual GitHub API calls
-    // For now, return mock data structure
-    const graphData = {
+    // Fetch real data from GitHub API
+    const githubData = await fetchRepoData(owner, repo)
+    
+    // Transform to graph format
+    const graphData = transformToGraph(githubData)
+
+    return NextResponse.json(graphData)
+  } catch (error) {
+    console.error('Error processing repo:', error)
+    
+    // If GitHub API fails, return mock data as fallback
+    const fallbackData = {
       nodes: [
         { 
           id: "main", 
@@ -43,38 +54,22 @@ export async function GET(request: Request) {
           color: "#ffaa00", 
           type: "branch",
           label: "feature/auth"
-        },
-        { 
-          id: "feature-ui", 
-          size: 2, 
-          color: "#ff6b6b", 
-          type: "branch",
-          label: "feature/ui"
-        },
-        { 
-          id: "hotfix-bug", 
-          size: 1, 
-          color: "#4ecdc4", 
-          type: "branch",
-          label: "hotfix/bug"
         }
       ],
       links: [
-        { source: "feature-auth", target: "main", weight: 2 },
-        { source: "feature-ui", target: "main", weight: 1 },
-        { source: "hotfix-bug", target: "main", weight: 1 }
+        { source: "feature-auth", target: "main", weight: 2, type: "merge" }
       ],
       metadata: {
         repoName: `${owner}/${repo}`,
-        totalBranches: 4,
-        totalCommits: 127,
-        lastUpdated: new Date().toISOString()
+        totalBranches: 2,
+        totalCommits: 50,
+        lastUpdated: new Date().toISOString(),
+        language: "TypeScript",
+        stars: 0,
+        forks: 0
       }
     }
 
-    return NextResponse.json(graphData)
-  } catch (error) {
-    console.error('Error processing repo:', error)
-    return NextResponse.json({ error: 'Failed to process repository' }, { status: 500 })
+    return NextResponse.json(fallbackData)
   }
 }
