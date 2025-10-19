@@ -1,7 +1,6 @@
 // lib/auth.ts
 import { NextAuthOptions } from 'next-auth'
 import GitHubProvider from 'next-auth/providers/github'
-import { SupabaseAdapter } from '@supabase/auth-helpers-nextjs'
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -10,20 +9,25 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
     }),
   ],
-  adapter: SupabaseAdapter({
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  }),
   callbacks: {
-    async session({ session, user }) {
+    async session({ session, token }) {
       // Add user ID to the session object
-      if (session.user) {
-        session.user.id = user.id
+      if (session.user && token.sub) {
+        session.user.id = token.sub
       }
       return session
     },
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+      }
+      return token
+    },
   },
   session: {
-    strategy: 'database',
+    strategy: 'jwt',
+  },
+  pages: {
+    signIn: '/',
   },
 }
