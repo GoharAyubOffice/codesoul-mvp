@@ -1,6 +1,6 @@
 // components/viz/NeuralRepo.tsx
 "use client"
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, Text } from '@react-three/drei'
 import { useMemo, useRef, forwardRef, useImperativeHandle } from 'react'
 import * as THREE from 'three'
@@ -32,6 +32,67 @@ interface RepoData {
 
 interface NeuralRepoProps {
   data: RepoData
+}
+
+function GlowingNode({ node, position }: { node: Node, position: [number, number, number] }) {
+  const spriteRef = useRef<THREE.Sprite>(null)
+
+  useFrame(({ clock }) => {
+    if (spriteRef.current) {
+      const scale = 1.5 + Math.sin(clock.getElapsedTime() * 2) * 0.5
+      spriteRef.current.scale.set(node.size * scale, node.size * scale, 1)
+    }
+  })
+
+  const glowTexture = useMemo(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 128
+    canvas.height = 128
+    const context = canvas.getContext('2d')!
+    const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64)
+    gradient.addColorStop(0, 'rgba(255,255,255,1)')
+    gradient.addColorStop(0.2, 'rgba(255,255,255,1)')
+    gradient.addColorStop(0.4, 'rgba(255,255,255,0.2)')
+    gradient.addColorStop(1, 'rgba(255,255,255,0)')
+    context.fillStyle = gradient
+    context.fillRect(0, 0, 128, 128)
+    return new THREE.CanvasTexture(canvas)
+  }, [])
+
+  return (
+    <group position={position}>
+      {/* Node sphere */}
+      <mesh>
+        <sphereGeometry args={[node.size * 0.3, 16, 16]} />
+        <meshStandardMaterial
+          color={node.color}
+          emissive={node.color}
+          emissiveIntensity={0.6}
+        />
+      </mesh>
+
+      {/* Glow sprite */}
+      <sprite ref={spriteRef} scale={[node.size * 2, node.size * 2, 1]}>
+        <spriteMaterial
+          map={glowTexture}
+          color={node.color}
+          transparent
+          blending={THREE.AdditiveBlending}
+        />
+      </sprite>
+
+      {/* Node label */}
+      <Text
+        position={[0, node.size * 0.5 + 0.5, 0]}
+        fontSize={0.3}
+        color="white"
+        anchorX="center"
+        anchorY="middle"
+      >
+        {node.label}
+      </Text>
+    </group>
+  )
 }
 
 // Component to expose screenshot functionality
@@ -94,30 +155,7 @@ function NeuralNetwork({ data }: { data: RepoData }) {
         const position = nodePositions[node.id]
         if (!position) return null
         
-        return (
-          <group key={node.id} position={position}>
-            {/* Node sphere */}
-            <mesh>
-              <sphereGeometry args={[node.size * 0.3, 16, 16]} />
-              <meshStandardMaterial 
-                color={node.color} 
-                emissive={node.color} 
-                emissiveIntensity={0.2}
-              />
-            </mesh>
-            
-            {/* Node label */}
-            <Text
-              position={[0, node.size * 0.5 + 0.5, 0]}
-              fontSize={0.3}
-              color="white"
-              anchorX="center"
-              anchorY="middle"
-            >
-              {node.label}
-            </Text>
-          </group>
-        )
+        return <GlowingNode key={node.id} node={node} position={position} />
       })}
 
       {/* Connections */}
