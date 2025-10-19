@@ -2,6 +2,7 @@
 import { Octokit } from '@octokit/rest'
 
 export interface GitHubRepoData {
+  id: number
   name: string
   full_name: string
   description: string | null
@@ -66,6 +67,7 @@ export async function fetchRepoData(owner: string, repo: string): Promise<GitHub
     })
 
     return {
+      id: repoInfo.id,
       name: repoInfo.name,
       full_name: repoInfo.full_name,
       description: repoInfo.description,

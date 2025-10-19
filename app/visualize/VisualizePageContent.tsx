@@ -86,23 +86,44 @@ export default function VisualizePageContent({ repoUrl }: { repoUrl: string }) {
   // Save visualization to leaderboard
   const saveVisualizationMutation = useMutation({
     mutationFn: async (score: any) => {
+      if (!repoData?.metadata?.repoName) {
+        throw new Error('Repository data not available')
+      }
+
+      // Extract owner and repo from full_name (e.g., "facebook/react")
+      const [owner, repo] = repoData.metadata.repoName.split('/')
+      if (!owner || !repo) {
+        throw new Error('Invalid repository name format')
+      }
+
       const response = await fetch('/api/leaderboard', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          repository_id: repoData?.metadata?.repoId || repoUrl,
+          github_repo_id: repoData.metadata?.repoId || undefined,
+          full_name: repoData.metadata.repoName,
+          owner: owner,
+          name: repo,
+          url: `https://github.com/${repoData.metadata.repoName}`,
+          description: repoData.metadata?.description || null,
+          language: repoData.metadata?.language || null,
+          stars: repoData.metadata?.stars || 0,
+          forks: repoData.metadata?.forks || 0,
           visualization_mode: vizMode,
           repo_score: score.final_score,
           complexity_score: score.complexity_score,
           activity_score: score.activity_score,
           social_score: score.social_score,
           health_score: score.health_score,
+          branches_count: repoData.metadata?.totalBranches || 0,
+          commits_count: repoData.metadata?.totalCommits || 0,
         }),
       })
       if (!response.ok) {
-        throw new Error('Failed to save visualization')
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to save visualization')
       }
       return response.json()
     },

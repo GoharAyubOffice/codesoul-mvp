@@ -25,6 +25,7 @@ export interface GraphData {
   nodes: GraphNode[]
   links: GraphLink[]
   metadata: {
+    repoId: number
     repoName: string
     totalBranches: number
     totalCommits: number
@@ -113,6 +114,7 @@ export function transformToGraph(data: GitHubRepoData): GraphData {
     nodes,
     links,
     metadata: {
+      repoId: data.id,
       repoName: data.full_name,
       totalBranches: data.branches.length,
       totalCommits: data.commits.length,
