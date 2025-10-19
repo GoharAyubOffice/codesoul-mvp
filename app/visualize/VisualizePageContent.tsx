@@ -7,6 +7,7 @@ import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import ShareButton from '@/components/ShareButton'
+import { calculateRepositoryScore, getScoreTier, getScoreColor } from '@/lib/scoring/calculateScore'
 
 // Dynamically import Three.js components to avoid SSR issues
 const NeuralRepoViz = dynamic(() => import('@/components/viz/NeuralRepo'), {
@@ -27,6 +28,8 @@ export default function VisualizePageContent({ repoUrl }: { repoUrl: string }) {
   const [vizMode, setVizMode] = useState<VizMode>('brain')
   const [aiCaption, setAiCaption] = useState<string>('')
   const [isPending, startTransition] = useTransition()
+  const [repoScore, setRepoScore] = useState<number | null>(null)
+  const [visualizationSaved, setVisualizationSaved] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -79,6 +82,65 @@ export default function VisualizePageContent({ repoUrl }: { repoUrl: string }) {
       setAiCaption('Code visualization complete! 🧠✨')
     }
   })
+
+  // Save visualization to leaderboard
+  const saveVisualizationMutation = useMutation({
+    mutationFn: async (score: any) => {
+      const response = await fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          repository_id: repoData?.metadata?.repoId || repoUrl,
+          visualization_mode: vizMode,
+          repo_score: score.final_score,
+          complexity_score: score.complexity_score,
+          activity_score: score.activity_score,
+          social_score: score.social_score,
+          health_score: score.health_score,
+        }),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to save visualization')
+      }
+      return response.json()
+    },
+    onSuccess: () => {
+      setVisualizationSaved(true)
+    },
+    onError: (error) => {
+      console.error('Error saving visualization:', error)
+    }
+  })
+
+  // Calculate and save score when data loads
+  useEffect(() => {
+    if (repoData?.metadata && !repoScore && !visualizationSaved) {
+      // Note: We need to pass the full GitHubRepoData to calculateRepositoryScore
+      // For now, we'll calculate from the metadata we have
+      // In a real scenario, you'd want to pass the full data
+      const estimatedScore = Math.min(100, Math.max(0,
+        (Math.log10(repoData.metadata.stars + 1) * 15) +
+        (Math.log10(repoData.metadata.forks + 1) * 10) +
+        (Math.min(50, repoData.metadata.totalBranches * 3)) +
+        (Math.min(35, (repoData.metadata.totalCommits / 1000) * 35))
+      ))
+
+      setRepoScore(estimatedScore)
+
+      // Auto-save visualization
+      if (session?.user) {
+        saveVisualizationMutation.mutate({
+          final_score: estimatedScore,
+          complexity_score: Math.min(50, repoData.metadata.totalBranches * 3),
+          activity_score: Math.min(35, (repoData.metadata.totalCommits / 1000) * 35),
+          social_score: (Math.log10(repoData.metadata.stars + 1) * 15),
+          health_score: 25,
+        })
+      }
+    }
+  }, [repoData, repoScore, visualizationSaved, session])
 
   if (status === 'loading') {
     return (
@@ -219,17 +281,66 @@ export default function VisualizePageContent({ repoUrl }: { repoUrl: string }) {
         </div>
       </main>
 
-      {/* Repository Info */}
+      {/* Repository Info & Score */}
       {repoData?.metadata && (
-        <div className="bg-white border-t p-4">
+        <div className="bg-gradient-to-r from-slate-50 to-slate-100 border-t p-4">
           <div className="max-w-7xl mx-auto">
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Branches: {repoData.metadata.totalBranches}</span>
-              <span>Commits: {repoData.metadata.totalCommits}</span>
-              <span>Language: {repoData.metadata.language || 'Unknown'}</span>
-              <span>Stars: {repoData.metadata.stars}</span>
-              <span>Last Updated: {new Date(repoData.metadata.lastUpdated).toLocaleDateString()}</span>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Branches</div>
+                <div className="text-lg font-semibold text-gray-900">{repoData.metadata.totalBranches}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Commits</div>
+                <div className="text-lg font-semibold text-gray-900">{repoData.metadata.totalCommits}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Language</div>
+                <div className="text-lg font-semibold text-gray-900">{repoData.metadata.language || '—'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Stars</div>
+                <div className="text-lg font-semibold text-gray-900">{repoData.metadata.stars.toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Forks</div>
+                <div className="text-lg font-semibold text-gray-900">{repoData.metadata.forks.toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Last Updated</div>
+                <div className="text-lg font-semibold text-gray-900">{new Date(repoData.metadata.lastUpdated).toLocaleDateString()}</div>
+              </div>
             </div>
+
+            {/* Score Display */}
+            {repoScore !== null && (
+              <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                <div className="flex items-center space-x-4">
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">CodeSoul Score</div>
+                    <div className="flex items-center space-x-2">
+                      <div className={`text-3xl font-bold bg-gradient-to-r ${getScoreColor(repoScore)} bg-clip-text text-transparent`}>
+                        {repoScore.toFixed(1)}
+                      </div>
+                      <div>
+                        <div className={`text-sm font-semibold px-2 py-1 rounded ${
+                          repoScore >= 85 ? 'bg-green-100 text-green-700' :
+                          repoScore >= 70 ? 'bg-blue-100 text-blue-700' :
+                          repoScore >= 55 ? 'bg-yellow-100 text-yellow-700' :
+                          repoScore >= 40 ? 'bg-orange-100 text-orange-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {getScoreTier(repoScore)} Tier
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <Link href="/leaderboard" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                  View Leaderboard →
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}

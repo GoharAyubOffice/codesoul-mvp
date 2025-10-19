@@ -59,7 +59,13 @@ export default function Dashboard() {
               <span className="text-sm text-gray-600">
                 Welcome, {session.user?.name}
               </span>
-              <Link 
+              <Link
+                href="/leaderboard"
+                className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+              >
+                Leaderboard
+              </Link>
+              <Link
                 href="/"
                 className="text-sm text-gray-500 hover:text-gray-700"
               >
