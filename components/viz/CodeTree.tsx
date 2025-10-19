@@ -4,6 +4,7 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Text } from '@react-three/drei'
 import { useMemo, forwardRef, useImperativeHandle } from 'react'
 import * as THREE from 'three'
+import { useSpring, animated } from '@react-spring/three'
 
 interface Node {
   id: string
@@ -60,6 +61,13 @@ const ScreenshotCapture = forwardRef<{ captureScreenshot: () => string | null }>
 function CodeTree({ data }: { data: RepoData }) {
   const { nodes, links } = data
 
+  const { scale } = useSpring({
+    from: { scale: 0 },
+    to: { scale: 1 },
+    config: { mass: 5, tension: 400, friction: 50, precision: 0.0001 },
+    delay: 200,
+  })
+
   // Create tree-like node positions
   const nodePositions = useMemo(() => {
     const positions: { [key: string]: [number, number, number] } = {}
@@ -88,7 +96,7 @@ function CodeTree({ data }: { data: RepoData }) {
   }, [nodes])
 
   return (
-    <>
+    <animated.group scale={scale}>
       {/* Lighting */}
       <ambientLight intensity={0.4} />
       <directionalLight position={[5, 5, 5]} intensity={1} />
@@ -185,7 +193,7 @@ function CodeTree({ data }: { data: RepoData }) {
           ;(window as any).captureTreeScreenshot = ref.captureScreenshot
         }
       }} />
-    </>
+    </animated.group>
   )
 }
 
