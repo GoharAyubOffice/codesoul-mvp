@@ -1,8 +1,8 @@
 // components/viz/NeuralRepo.tsx
 "use client"
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Text } from '@react-three/drei'
-import { useMemo } from 'react'
+import { useMemo, useRef, forwardRef, useImperativeHandle } from 'react'
 import * as THREE from 'three'
 
 interface Node {
@@ -33,6 +33,29 @@ interface RepoData {
 interface NeuralRepoProps {
   data: RepoData
 }
+
+// Component to expose screenshot functionality
+const ScreenshotCapture = forwardRef<{ captureScreenshot: () => string | null }>((props, ref) => {
+  const { gl, scene, camera } = useThree()
+  
+  useImperativeHandle(ref, () => ({
+    captureScreenshot: () => {
+      try {
+        // Render the scene
+        gl.render(scene, camera)
+        
+        // Get the canvas data
+        const canvas = gl.domElement
+        return canvas.toDataURL('image/png', 0.9)
+      } catch (error) {
+        console.error('Error capturing screenshot:', error)
+        return null
+      }
+    }
+  }))
+  
+  return null
+})
 
 function NeuralNetwork({ data }: { data: RepoData }) {
   const { nodes, links } = data
@@ -129,6 +152,14 @@ function NeuralNetwork({ data }: { data: RepoData }) {
         minDistance={5}
         maxDistance={20}
       />
+      
+      {/* Screenshot capture component */}
+      <ScreenshotCapture ref={(ref) => {
+        if (ref) {
+          // Store the screenshot function globally for the share button
+          ;(window as any).captureNeuralScreenshot = ref.captureScreenshot
+        }
+      }} />
     </>
   )
 }

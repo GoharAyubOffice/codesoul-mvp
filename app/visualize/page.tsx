@@ -2,10 +2,11 @@
 "use client"
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import ShareButton from '@/components/ShareButton'
 
 // Dynamically import Three.js components to avoid SSR issues
 const NeuralRepoViz = dynamic(() => import('@/components/viz/NeuralRepo'), {
@@ -26,6 +27,7 @@ function VisualizeContent() {
   const searchParams = useSearchParams()
   const repoUrl = searchParams.get('repo')
   const [vizMode, setVizMode] = useState<VizMode>('brain')
+  const [aiCaption, setAiCaption] = useState<string>('')
 
   if (status === 'loading') {
     return (
@@ -57,6 +59,34 @@ function VisualizeContent() {
     },
     enabled: !!repoUrl
   })
+
+  // Generate AI caption
+  const generateCaptionMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/ai/caption', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ repoData }),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to generate caption')
+      }
+      return response.json()
+    },
+    onSuccess: (data) => {
+      setAiCaption(data.caption)
+    },
+    onError: (error) => {
+      console.error('Error generating caption:', error)
+      setAiCaption('Code visualization complete! 🧠✨')
+    }
+  })
+
+  const handleGenerateCaption = () => {
+    generateCaptionMutation.mutate()
+  }
 
   if (isLoading) {
     return (
@@ -133,9 +163,40 @@ function VisualizeContent() {
         </div>
       </div>
 
+      {/* AI Caption Section */}
+      <div className="bg-white border-b px-4 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex-1">
+            {aiCaption ? (
+              <div className="text-sm text-gray-700">
+                <span className="font-medium">AI Caption:</span> {aiCaption}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">
+                Generate an AI caption for this visualization
+              </div>
+            )}
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleGenerateCaption}
+              disabled={generateCaptionMutation.isPending}
+              className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 disabled:bg-gray-400 transition-colors"
+            >
+              {generateCaptionMutation.isPending ? 'Generating...' : 'Generate Caption'}
+            </button>
+            <ShareButton 
+              repoData={repoData} 
+              aiCaption={aiCaption} 
+              vizMode={vizMode}
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Visualization Container */}
       <main className="flex-1">
-        <div className="h-[calc(100vh-140px)]">
+        <div className="h-[calc(100vh-200px)]">
           {vizMode === 'brain' ? (
             <NeuralRepoViz data={repoData} />
           ) : (
@@ -151,6 +212,8 @@ function VisualizeContent() {
             <div className="flex justify-between text-sm text-gray-600">
               <span>Branches: {repoData.metadata.totalBranches}</span>
               <span>Commits: {repoData.metadata.totalCommits}</span>
+              <span>Language: {repoData.metadata.language || 'Unknown'}</span>
+              <span>Stars: {repoData.metadata.stars}</span>
               <span>Last Updated: {new Date(repoData.metadata.lastUpdated).toLocaleDateString()}</span>
             </div>
           </div>
