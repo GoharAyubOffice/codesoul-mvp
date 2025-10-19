@@ -68,6 +68,14 @@ export async function recordUserVisualization(
   }
 ) {
   try {
+    if (!repositoryId) {
+      throw new Error('Repository ID is required')
+    }
+
+    if (!userId) {
+      throw new Error('User ID is required')
+    }
+
     const visualizationData: UserVisualizationInsert = {
       user_id: userId,
       repository_id: repositoryId,
@@ -79,6 +87,13 @@ export async function recordUserVisualization(
       visualization_mode: visualizationMode,
     }
 
+    console.log('Recording visualization:', {
+      userId,
+      repositoryId,
+      repoScore,
+      visualizationMode,
+    })
+
     const { data, error } = await supabase
       .from('user_visualizations')
       .insert(visualizationData)
@@ -86,10 +101,16 @@ export async function recordUserVisualization(
       .single()
 
     if (error) {
-      console.error('Error recording visualization:', error)
-      throw error
+      console.error('Supabase error recording visualization:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      })
+      throw new Error(`Failed to insert visualization: ${error.message}`)
     }
 
+    console.log('Visualization recorded successfully:', data)
     return data as UserVisualization
   } catch (error) {
     console.error('Failed to record visualization:', error)

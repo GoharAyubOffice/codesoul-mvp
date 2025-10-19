@@ -155,27 +155,44 @@ export async function POST(request: NextRequest) {
     }
 
     // Record visualization
-    const visualization = await recordUserVisualization(
-      session.user.id || session.user.email || 'anonymous',
-      repoId,
-      visualization_mode,
-      repo_score,
-      {
-        complexity_score: complexity_score || 0,
-        activity_score: activity_score || 0,
-        social_score: social_score || 0,
-        health_score: health_score || 0,
-      }
-    )
+    try {
+      const visualization = await recordUserVisualization(
+        session.user.id || session.user.email || 'anonymous',
+        repoId,
+        visualization_mode,
+        repo_score,
+        {
+          complexity_score: complexity_score || 0,
+          activity_score: activity_score || 0,
+          social_score: social_score || 0,
+          health_score: health_score || 0,
+        }
+      )
 
-    return NextResponse.json({
-      success: true,
-      data: visualization,
-    })
+      return NextResponse.json({
+        success: true,
+        data: visualization,
+      })
+    } catch (vizError) {
+      console.error('Error recording visualization:', vizError)
+      // Return partial success - repo was created, just visualization recording failed
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Failed to record visualization',
+          details: vizError instanceof Error ? vizError.message : 'Unknown error'
+        },
+        { status: 500 }
+      )
+    }
   } catch (error) {
-    console.error('Error recording visualization:', error)
+    console.error('Error in leaderboard POST:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to record visualization' },
+      {
+        success: false,
+        error: 'Failed to process request',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }
